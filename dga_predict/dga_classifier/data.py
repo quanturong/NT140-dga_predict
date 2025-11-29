@@ -130,8 +130,13 @@ def generate_pronounceable_domain():
     return domain[:length]
 
 
-def gen_malicious_core(num_per_dga=15000):
-    """Generate 11 STRONG DGA families (removed medium ones, added strongest)"""
+def gen_malicious_core(num_per_dga=15000, benign_domains=None):
+    """Generate 11 STRONG DGA families (removed medium ones, added strongest)
+    
+    Args:
+        num_per_dga: Số lượng domain mỗi DGA family
+        benign_domains: List benign domains để train Real ML-based DGAs (optional)
+    """
     domains, labels = [], []
     print(f"Generating STRONG DGAs ({num_per_dga} per family)...")
 
@@ -183,17 +188,33 @@ def gen_malicious_core(num_per_dga=15000):
 
     # 9. Real LSTM-based DGA - STATE-OF-THE-ART (NEW)
     print("  - Generating real LSTM-based DGA (training on benign domains)...")
-    domains += real_lstm_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    if benign_domains:
+        # Pass benign domains directly to avoid circular dependency
+        domains += real_lstm_dga.generate_domains_with_benign(
+            num_per_dga, benign_domains, start_date=datetime(2024,1,1)
+        )
+    else:
+        domains += real_lstm_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["real_lstm_dga"] * num_per_dga
 
     # 10. Real GAN-based DGA - STATE-OF-THE-ART (NEW)
     print("  - Generating real GAN-based DGA (training GAN)...")
-    domains += real_gan_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    if benign_domains:
+        domains += real_gan_dga.generate_domains_with_benign(
+            num_per_dga, benign_domains, start_date=datetime(2024,1,1)
+        )
+    else:
+        domains += real_gan_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["real_gan_dga"] * num_per_dga
 
     # 11. Adversarial-trained DGA - STATE-OF-THE-ART (NEW)
     print("  - Generating adversarial-trained DGA (bypassing detector)...")
-    domains += adversarial_trained_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    if benign_domains:
+        domains += adversarial_trained_dga.generate_domains_with_benign(
+            num_per_dga, benign_domains, start_date=datetime(2024,1,1)
+        )
+    else:
+        domains += adversarial_trained_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["adversarial_trained_dga"] * num_per_dga
 
     print(f"✓ Generated {len(domains)} malicious domains (STRONG DGAs only)")
@@ -233,11 +254,18 @@ def gen_data(force=False, num_per_dga=15000):
         print("GENERATING TRAINING DATA (~1M domains)")
         print("="*60)
 
-        d1, l1 = gen_malicious_core(num_per_dga)
+        # Get benign domains FIRST to avoid circular dependency
+        # Estimate total malicious domains: 11 strong DGAs + 19 stub DGAs = 30 families
+        estimated_malicious = 30 * num_per_dga
+        print("Getting benign domains first (for Real ML-based DGAs training)...")
+        benign = get_alexa(estimated_malicious)
+        
+        # Now generate malicious domains with benign domains available
+        d1, l1 = gen_malicious_core(num_per_dga, benign_domains=benign)
         d2, l2 = gen_additional_dgas(num_per_dga)
         domains, labels = d1 + d2, l1 + l2
 
-        benign = get_alexa(len(domains))
+        # Add benign domains to final dataset
         domains += benign
         labels += ["benign"] * len(benign)
 

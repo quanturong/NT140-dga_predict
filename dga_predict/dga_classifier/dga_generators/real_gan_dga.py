@@ -170,6 +170,61 @@ def generate_domain_gan(generator, char_to_idx, idx_to_char, maxlen, latent_dim,
     
     return domain if domain else ''.join(random.choices(string.ascii_lowercase, k=8))
 
+def generate_domains_with_benign(num_domains, benign_domains, start_date=None, add_tld=False, force_retrain=False):
+    """
+    Generate domains using real GAN generator with provided benign domains
+    """
+    if start_date is None:
+        start_date = datetime.now()
+    
+    # Try to load existing model
+    generator = None
+    char_to_idx = None
+    idx_to_char = None
+    maxlen = 20
+    latent_dim = 100
+    
+    if not force_retrain and os.path.exists(MODEL_FILE) and os.path.exists(VOCAB_FILE):
+        try:
+            generator = load_model(MODEL_FILE)
+            with open(VOCAB_FILE, 'rb') as f:
+                char_to_idx, idx_to_char, maxlen, latent_dim = pickle.load(f)
+            print("✓ Loaded existing GAN generator model")
+        except:
+            force_retrain = True
+    
+    # If no model, need to train
+    if generator is None or force_retrain:
+        if len(benign_domains) < 1000:
+            return generate_domains_fallback(num_domains, start_date, add_tld)
+        
+        # Use provided benign domains (limit to 20k for training speed)
+        training_domains = benign_domains[:20000]
+        generator, char_to_idx, idx_to_char = train_gan(training_domains)
+        if generator is None:
+            return generate_domains_fallback(num_domains, start_date, add_tld)
+    
+    # Generate domains
+    domains = []
+    base_seed = int(start_date.timestamp())
+    
+    for i in range(num_domains):
+        seed = base_seed + i
+        domain = generate_domain_gan(generator, char_to_idx, idx_to_char, maxlen, latent_dim, seed)
+        
+        if len(domain) < 5:
+            domain += ''.join(random.choices(string.ascii_lowercase, k=5))
+        domain = domain[:20]
+        
+        if add_tld:
+            tlds = ['com', 'net', 'org', 'info']
+            domain += '.' + random.choice(tlds)
+        
+        domains.append(domain)
+    
+    return domains
+
+
 def generate_domains(num_domains, start_date=None, add_tld=False, force_retrain=False):
     """
     Generate domains using real GAN generator

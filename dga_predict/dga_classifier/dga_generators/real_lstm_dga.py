@@ -119,6 +119,69 @@ def generate_domain_lstm(model, char_to_idx, idx_to_char, maxlen, seed=None, tem
     
     return domain if domain else ''.join(random.choices(string.ascii_lowercase, k=8))
 
+def generate_domains_with_benign(num_domains, benign_domains, start_date=None, add_tld=False, force_retrain=False):
+    """
+    Generate domains using real LSTM generator with provided benign domains
+    
+    Args:
+        num_domains: Số lượng domain
+        benign_domains: List of benign domains for training
+        start_date: Ngày bắt đầu
+        add_tld: Có thêm TLD không
+        force_retrain: Force retrain model
+    """
+    if start_date is None:
+        start_date = datetime.now()
+    
+    # Try to load existing model
+    model = None
+    char_to_idx = None
+    idx_to_char = None
+    maxlen = 20
+    
+    if not force_retrain and os.path.exists(MODEL_FILE) and os.path.exists(VOCAB_FILE):
+        try:
+            model = load_model(MODEL_FILE)
+            with open(VOCAB_FILE, 'rb') as f:
+                char_to_idx, idx_to_char, maxlen = pickle.load(f)
+            print("✓ Loaded existing LSTM generator model")
+        except:
+            force_retrain = True
+    
+    # If no model, need to train
+    if model is None or force_retrain:
+        if len(benign_domains) < 1000:
+            print("⚠ Not enough benign domains, using fallback generator")
+            return generate_domains_fallback(num_domains, start_date, add_tld)
+        
+        # Use provided benign domains (limit to 50k for training speed)
+        training_domains = benign_domains[:50000]
+        model, char_to_idx, idx_to_char = train_lstm_generator(training_domains)
+        if model is None:
+            return generate_domains_fallback(num_domains, start_date, add_tld)
+    
+    # Generate domains
+    domains = []
+    base_seed = int(start_date.timestamp())
+    
+    for i in range(num_domains):
+        seed = base_seed + i
+        domain = generate_domain_lstm(model, char_to_idx, idx_to_char, maxlen, seed)
+        
+        # Ensure reasonable length
+        if len(domain) < 5:
+            domain += ''.join(random.choices(string.ascii_lowercase, k=5))
+        domain = domain[:20]  # Max length
+        
+        if add_tld:
+            tlds = ['com', 'net', 'org', 'info']
+            domain += '.' + random.choice(tlds)
+        
+        domains.append(domain)
+    
+    return domains
+
+
 def generate_domains(num_domains, start_date=None, add_tld=False, force_retrain=False):
     """
     Generate domains using real LSTM generator

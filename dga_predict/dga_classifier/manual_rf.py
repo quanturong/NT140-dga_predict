@@ -2,7 +2,7 @@
 import numpy as np
 import pandas as pd
 import dga_classifier.data as data
-from sklearn.model_selection import train_test_split
+from sklearn.model_selection import train_test_split, StratifiedKFold
 from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import roc_auc_score, confusion_matrix
 from math import log2
@@ -37,37 +37,53 @@ def extract_features(domains):
     return np.array(features)
 
 def run(nfolds=10, n_estimators=100):
-    """Train and evaluate Random Forest with manual features"""
+    """Train and evaluate Random Forest with manual features using cross-validation"""
     indata = data.get_data()
     X = [x[1] for x in indata]
-    y_labels = [0 if x[0] == "benign" else 1 for x in indata]
+    y_labels = np.array([0 if x[0] == "benign" else 1 for x in indata])
 
     feats = extract_features(X)
 
-    X_train, X_test, y_train, y_test = train_test_split(
-        feats, y_labels, test_size=0.2, stratify=y_labels, random_state=42
-    )
+    final_data = []
 
-    print("Training RandomForest...")
-    clf = RandomForestClassifier(
-        n_estimators=n_estimators,
-        max_depth=None,
-        min_samples_split=2,
-        random_state=42,
-        n_jobs=-1
-    )
-    clf.fit(X_train, y_train)
+    # --- FAST MODE ---
+    if nfolds <= 1:
+        print("\nRunning in FAST MODE (single train/test split)...")
+        X_train, X_test, y_train, y_test = train_test_split(
+            feats, y_labels, test_size=0.2, stratify=y_labels, random_state=42
+        )
+        folds = [(X_train, X_test, y_train, y_test)]
+    else:
+        skf = StratifiedKFold(n_splits=nfolds, shuffle=True, random_state=42)
+        folds = []
+        for train_idx, test_idx in skf.split(feats, y_labels):
+            folds.append((feats[train_idx], feats[test_idx], y_labels[train_idx], y_labels[test_idx]))
 
-    probs = clf.predict_proba(X_test)[:, 1]
-    auc = roc_auc_score(y_test, probs)
-    cm = confusion_matrix(y_test, probs > 0.5)
+    # --- TRAIN LOOP ---
+    for fold, (X_train, X_test, y_train, y_test) in enumerate(folds, start=1):
+        print(f"\nFold {fold}/{len(folds)}")
+        print("Training RandomForest...")
+        clf = RandomForestClassifier(
+            n_estimators=n_estimators,
+            max_depth=None,
+            min_samples_split=2,
+            random_state=42,
+            n_jobs=-1
+        )
+        clf.fit(X_train, y_train)
 
-    print(f"✓ AUC = {auc:.4f}")
-    print(cm)
+        probs = clf.predict_proba(X_test)[:, 1]
+        auc = roc_auc_score(y_test, probs)
+        cm = confusion_matrix(y_test, probs > 0.5)
 
-    return [{
-        "y": y_test,
-        "probs": probs,
-        "auc": auc,
-        "confusion_matrix": cm
-    }]
+        print(f"✓ AUC = {auc:.4f}")
+        print(cm)
+
+        final_data.append({
+            "y": y_test,
+            "probs": probs,
+            "auc": auc,
+            "confusion_matrix": cm
+        })
+
+    return final_data

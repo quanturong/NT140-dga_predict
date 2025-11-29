@@ -10,7 +10,7 @@ from sklearn.model_selection import StratifiedKFold, train_test_split
 
 def build_model(max_features, maxlen):
     model = Sequential()
-    model.add(Embedding(max_features, 128, input_length=maxlen))
+    model.add(Embedding(max_features, 128))  # Removed input_length (deprecated)
     model.add(LSTM(128))
     model.add(Dropout(0.5))
     model.add(Dense(1))

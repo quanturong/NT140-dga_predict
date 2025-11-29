@@ -63,13 +63,16 @@ def build_generator(vocab_size, maxlen=20, latent_dim=100):
 
 def build_discriminator(vocab_size, maxlen=20):
     """Build GAN Discriminator"""
-    model = Sequential([
-        Embedding(vocab_size, 128),  # Removed deprecated input_length
-        LSTM(128),
-        Dense(64),
-        Dropout(0.5),
-        Dense(1, activation='sigmoid')
-    ])
+    # Use Input layer to specify input shape explicitly
+    from tensorflow.keras.layers import Input
+    input_layer = Input(shape=(maxlen,))
+    embedding = Embedding(vocab_size, 128)(input_layer)
+    lstm = LSTM(128)(embedding)
+    dense1 = Dense(64)(lstm)
+    dropout = Dropout(0.5)(dense1)
+    output = Dense(1, activation='sigmoid')(dropout)
+    
+    model = Model(inputs=input_layer, outputs=output)
     return model
 
 def train_gan(domains, epochs=100, batch_size=128):
@@ -105,17 +108,38 @@ def train_gan(domains, epochs=100, batch_size=128):
     # Helper function to sample sequences from generator output
     def sample_sequences(generated_probs, batch_size, maxlen, vocab_size):
         """Sample sequences from probability distribution"""
+        # Ensure input is numpy array
+        if not isinstance(generated_probs, np.ndarray):
+            generated_probs = np.array(generated_probs)
+        
+        # Flatten and reshape to ensure correct shape
+        total_size = batch_size * maxlen * vocab_size
+        if generated_probs.size != total_size:
+            # Try to reshape to expected size
+            generated_probs = generated_probs.flatten()[:total_size]
+            if generated_probs.size < total_size:
+                # Pad with zeros if needed
+                padding = np.zeros(total_size - generated_probs.size)
+                generated_probs = np.concatenate([generated_probs, padding])
+        
+        # Reshape to (batch_size, maxlen, vocab_size)
         generated_probs = generated_probs.reshape((batch_size, maxlen, vocab_size))
+        
+        # Validate shape
+        if generated_probs.shape != (batch_size, maxlen, vocab_size):
+            raise ValueError(f"Invalid shape after reshape: {generated_probs.shape}, expected ({batch_size}, {maxlen}, {vocab_size})")
+        
         sequences = []
         for i in range(batch_size):
             seq = []
             for j in range(maxlen):
                 # Get probability distribution for this position
-                probs = generated_probs[i, j]
+                probs = generated_probs[i, j].copy()
                 
                 # Normalize probabilities to ensure they sum to 1
                 # Handle negative values and ensure non-negative
                 probs = np.maximum(probs, 0)  # Remove negative values
+                probs = np.nan_to_num(probs, nan=0.0, posinf=1.0, neginf=0.0)
                 probs_sum = np.sum(probs)
                 
                 if probs_sum > 0:
@@ -128,17 +152,31 @@ def train_gan(domains, epochs=100, batch_size=128):
                 probs = probs / np.sum(probs)
                 
                 # Sample from distribution
-                char_idx = np.random.choice(vocab_size, p=probs)
-                seq.append(char_idx)
+                try:
+                    char_idx = np.random.choice(vocab_size, p=probs)
+                except ValueError as e:
+                    # Fallback if still has issues
+                    char_idx = np.random.randint(0, vocab_size)
+                
+                seq.append(int(char_idx))
             sequences.append(seq)
-        return np.array(sequences)
+        
+        result = np.array(sequences, dtype=np.int32)
+        
+        # Validate output shape
+        if result.shape != (batch_size, maxlen):
+            raise ValueError(f"Invalid output shape: {result.shape}, expected ({batch_size}, {maxlen})")
+        
+        return result
     
     # Combined model (generator + discriminator)
     z = Input(shape=(latent_dim,))
     generated_probs = generator(z)
     # Reshape to (batch, maxlen, vocab_size) and sample using argmax
     generated_reshaped = Reshape((maxlen, vocab_size))(generated_probs)
-    generated_seqs = Lambda(lambda x: tf.argmax(x, axis=-1))(generated_reshaped)
+    # Use argmax to get most likely character at each position
+    # argmax on axis=-1 reduces (batch, maxlen, vocab_size) -> (batch, maxlen)
+    generated_seqs = Lambda(lambda x: tf.argmax(x, axis=-1, output_type=tf.int32))(generated_reshaped)
     validity = discriminator(generated_seqs)
     
     discriminator.trainable = False
@@ -157,7 +195,32 @@ def train_gan(domains, epochs=100, batch_size=128):
         
         noise = np.random.normal(0, 1, (batch_size, latent_dim))
         gen_probs = generator.predict(noise, verbose=0)
+        
+        # Validate generator output shape
+        expected_size = batch_size * maxlen * vocab_size
+        if gen_probs.size != expected_size:
+            # Try to fix shape
+            gen_probs = gen_probs.flatten()[:expected_size]
+            if gen_probs.size < expected_size:
+                gen_probs = np.pad(gen_probs, (0, expected_size - gen_probs.size), mode='constant')
+            gen_probs = gen_probs.reshape((batch_size, maxlen, vocab_size))
+            # Re-flatten for sample_sequences
+            gen_probs = gen_probs.flatten()
+        
         gen_seqs = sample_sequences(gen_probs, batch_size, maxlen, vocab_size)
+        
+        # Validate sequences before training
+        if gen_seqs.shape[1] == 0:
+            raise ValueError(f"Generated sequences have zero length! Shape: {gen_seqs.shape}")
+        
+        # Ensure sequences are padded to maxlen for discriminator
+        if gen_seqs.shape[1] < maxlen:
+            # Pad sequences
+            padding = np.zeros((batch_size, maxlen - gen_seqs.shape[1]), dtype=np.int32)
+            gen_seqs = np.concatenate([gen_seqs, padding], axis=1)
+        elif gen_seqs.shape[1] > maxlen:
+            # Truncate sequences
+            gen_seqs = gen_seqs[:, :maxlen]
         
         d_loss_real = discriminator.train_on_batch(real_seqs, valid)
         d_loss_fake = discriminator.train_on_batch(gen_seqs, fake)

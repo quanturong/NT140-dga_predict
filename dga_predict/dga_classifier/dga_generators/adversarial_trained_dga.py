@@ -13,9 +13,10 @@ import string
 import pickle
 from datetime import datetime
 from tensorflow.keras.models import Sequential, load_model, Model
-from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Input
+from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Input, Lambda, Reshape
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+import tensorflow as tf
 
 # Try to configure GPU, fallback to CPU on error
 try:
@@ -66,14 +67,16 @@ def build_adversarial_generator(vocab_size, maxlen=20, latent_dim=100):
 
 def build_detector_model(vocab_size, maxlen=20):
     """Build detector model (simulates detection system)"""
-    model = Sequential([
-        Embedding(vocab_size, 128),  # Removed deprecated input_length
-        LSTM(128, return_sequences=True),
-        LSTM(64),
-        Dropout(0.5),
-        Dense(32, activation='relu'),
-        Dense(1, activation='sigmoid')  # 0 = benign, 1 = DGA
-    ])
+    # Use Input layer to specify input shape explicitly
+    input_layer = Input(shape=(maxlen,))
+    embedding = Embedding(vocab_size, 128)(input_layer)
+    lstm1 = LSTM(128, return_sequences=True)(embedding)
+    lstm2 = LSTM(64)(lstm1)
+    dropout = Dropout(0.5)(lstm2)
+    dense1 = Dense(32, activation='relu')(dropout)
+    output = Dense(1, activation='sigmoid')(dense1)  # 0 = benign, 1 = DGA
+    
+    model = Model(inputs=input_layer, outputs=output)
     return model
 
 def train_adversarial_generator(domains, epochs=50, batch_size=128):
@@ -113,8 +116,12 @@ def train_adversarial_generator(domains, epochs=50, batch_size=128):
     detector.trainable = False
     
     z = Input(shape=(latent_dim,))
-    generated = generator(z)
-    validity = detector(generated)
+    generated_probs = generator(z)
+    # Reshape generator output to (batch, maxlen, vocab_size)
+    generated_reshaped = Reshape((maxlen, vocab_size))(generated_probs)
+    # Convert probabilities to sequences using argmax
+    generated_seqs = Lambda(lambda x: tf.argmax(x, axis=-1, output_type=tf.int32))(generated_reshaped)
+    validity = detector(generated_seqs)
     adversarial = Model(z, validity)
     adversarial.compile(optimizer=Adam(0.0002), loss='binary_crossentropy')
     

@@ -2,15 +2,40 @@
 Real LSTM-based DGA Generator
 Trains an actual LSTM model on benign domains to generate DGA domains
 """
+import os
+# Set CPU mode if CUDA has issues (must be before tensorflow import)
+# Uncomment the line below to force CPU mode if you get CUDA errors:
+# os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 import numpy as np
 import random
 import string
-import os
 import pickle
 from datetime import datetime
 from tensorflow.keras.models import Sequential, load_model
 from tensorflow.keras.layers import LSTM, Dense, Embedding
 from tensorflow.keras.preprocessing.sequence import pad_sequences
+
+# Try to configure GPU, fallback to CPU on error
+try:
+    import tensorflow as tf
+    # Try to detect GPU
+    gpus = tf.config.list_physical_devices('GPU')
+    if len(gpus) > 0:
+        # GPU available, set memory growth to avoid allocation errors
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except Exception as e:
+            # If GPU config fails, fallback to CPU
+            print(f"⚠ GPU configuration failed: {e}, using CPU")
+            os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    else:
+        print("ℹ No GPU detected, using CPU")
+except Exception as e:
+    # If tensorflow not available or error, use CPU
+    print(f"⚠ TensorFlow GPU setup failed: {e}, using CPU")
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 MODEL_FILE = os.path.join(os.path.dirname(__file__), 'lstm_generator_model.h5')
 VOCAB_FILE = os.path.join(os.path.dirname(__file__), 'lstm_generator_vocab.pkl')
@@ -36,7 +61,7 @@ def prepare_sequences(domains, char_to_idx, maxlen=20):
 def build_lstm_generator(vocab_size, embedding_dim=128, lstm_units=256, maxlen=20):
     """Build LSTM generator model"""
     model = Sequential([
-        Embedding(vocab_size, embedding_dim, input_length=maxlen),
+        Embedding(vocab_size, embedding_dim),  # Removed deprecated input_length
         LSTM(lstm_units, return_sequences=True),
         LSTM(lstm_units),
         Dense(vocab_size, activation='softmax')
@@ -50,6 +75,7 @@ def train_lstm_generator(domains, epochs=100, batch_size=128):
     Note: Increased epochs to 100 for better learning of benign patterns
     """
     print(f"Training LSTM generator on {len(domains)} benign domains ({epochs} epochs)...")
+    print("  (Using CPU if GPU unavailable - this may take longer)")
     
     # Build vocabulary
     char_to_idx, idx_to_char = build_char_vocab(domains)

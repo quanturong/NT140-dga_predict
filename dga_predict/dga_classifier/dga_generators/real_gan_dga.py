@@ -2,10 +2,14 @@
 Real GAN-based DGA Generator
 Uses actual Generative Adversarial Network (Generator + Discriminator)
 """
+import os
+# Set CPU mode if CUDA has issues (must be before tensorflow import)
+# Uncomment the line below to force CPU mode if you get CUDA errors:
+# os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+
 import numpy as np
 import random
 import string
-import os
 import pickle
 from datetime import datetime
 from tensorflow.keras.models import Sequential, load_model, Model
@@ -13,6 +17,26 @@ from tensorflow.keras.layers import Dense, LSTM, Embedding, Dropout, Input, Lamb
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.preprocessing.sequence import pad_sequences
 import tensorflow as tf
+
+# Try to configure GPU, fallback to CPU on error
+try:
+    # Try to detect GPU
+    gpus = tf.config.list_physical_devices('GPU')
+    if len(gpus) > 0:
+        # GPU available, set memory growth to avoid allocation errors
+        try:
+            for gpu in gpus:
+                tf.config.experimental.set_memory_growth(gpu, True)
+        except Exception as e:
+            # If GPU config fails, fallback to CPU
+            print(f"⚠ GPU configuration failed: {e}, using CPU")
+            os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
+    else:
+        print("ℹ No GPU detected, using CPU")
+except Exception as e:
+    # If tensorflow not available or error, use CPU
+    print(f"⚠ TensorFlow GPU setup failed: {e}, using CPU")
+    os.environ['CUDA_VISIBLE_DEVICES'] = '-1'
 
 MODEL_FILE = os.path.join(os.path.dirname(__file__), 'gan_generator_model.h5')
 VOCAB_FILE = os.path.join(os.path.dirname(__file__), 'gan_generator_vocab.pkl')
@@ -40,7 +64,7 @@ def build_generator(vocab_size, maxlen=20, latent_dim=100):
 def build_discriminator(vocab_size, maxlen=20):
     """Build GAN Discriminator"""
     model = Sequential([
-        Embedding(vocab_size, 128, input_length=maxlen),
+        Embedding(vocab_size, 128),  # Removed deprecated input_length
         LSTM(128),
         Dense(64),
         Dropout(0.5),
@@ -54,6 +78,7 @@ def train_gan(domains, epochs=100, batch_size=128):
     Note: Increased epochs to 100 for better adversarial training
     """
     print(f"Training GAN generator on {len(domains)} benign domains ({epochs} epochs)...")
+    print("  (Using CPU if GPU unavailable - this may take longer)")
     
     # Build vocabulary
     char_to_idx, idx_to_char = build_char_vocab(domains)

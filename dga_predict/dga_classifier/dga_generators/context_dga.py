@@ -6,10 +6,13 @@ import hashlib
 import random
 from datetime import datetime
 
-# Simulate external data sources
-NEWS_KEYWORDS = ["tech", "crypto", "ai", "cloud", "data", "security", "update", "news"]
-STOCK_SYMBOLS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "META", "NVDA"]
-WEATHER_TYPES = ["sunny", "cloudy", "rainy", "windy", "stormy"]
+# Enhanced external data sources (more realistic)
+NEWS_KEYWORDS = ["tech", "crypto", "ai", "cloud", "data", "security", "update", "news", 
+                 "digital", "innovation", "cyber", "network", "platform", "service",
+                 "business", "market", "finance", "health", "education", "science"]
+STOCK_SYMBOLS = ["AAPL", "GOOGL", "MSFT", "AMZN", "TSLA", "META", "NVDA", "NFLX", "DIS", "JPM"]
+WEATHER_TYPES = ["sunny", "cloudy", "rainy", "windy", "stormy", "foggy", "snowy", "clear"]
+CRYPTO_PRICES = ["BTC", "ETH", "BNB", "ADA", "SOL", "XRP", "DOT", "DOGE"]
 
 def get_context_seed(date):
     """
@@ -20,7 +23,7 @@ def get_context_seed(date):
     day_of_year = date.timetuple().tm_yday
     week_of_year = day_of_year // 7
     
-    # Simulate news headline
+    # Simulate multiple external data sources
     news = NEWS_KEYWORDS[day_of_year % len(NEWS_KEYWORDS)]
     
     # Simulate stock price
@@ -31,8 +34,12 @@ def get_context_seed(date):
     weather = WEATHER_TYPES[day_of_year % len(WEATHER_TYPES)]
     temp = 20 + (day_of_year % 30)
     
-    # Combine context
-    context_str = f"{news}-{stock}-{price}-{weather}-{temp}-{date.strftime('%Y%m%d')}"
+    # Simulate crypto price
+    crypto = CRYPTO_PRICES[day_of_year % len(CRYPTO_PRICES)]
+    crypto_price = 30000 + (day_of_year % 50000)
+    
+    # Combine multiple context sources (more realistic)
+    context_str = f"{news}-{stock}-{price}-{weather}-{temp}-{crypto}-{crypto_price}-{date.strftime('%Y%m%d')}-{date.hour}"
     return hashlib.sha256(context_str.encode()).hexdigest()
 
 

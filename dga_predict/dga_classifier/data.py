@@ -6,10 +6,12 @@ from zipfile import ZipFile
 import pickle, os, random, string, tldextract
 
 from dga_classifier.dga_generators import (
-    # New complex DGAs
-    wordlist_dga, hash_dga, context_dga, multistage_dga,
+    # Strong DGAs
+    hash_dga, context_dga, multistage_dga,
     neural_like_dga, advanced_hash_dga, time_varying_dga,
-    obfuscated_dga, adaptive_dga
+    obfuscated_dga, adaptive_dga,
+    # New strongest DGAs
+    lstm_based_dga, adversarial_dga, gan_like_dga
 )
 
 ALEXA_1M = "http://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip"
@@ -129,16 +131,11 @@ def generate_pronounceable_domain():
 
 
 def gen_malicious_core(num_per_dga=15000):
-    """Generate 11 complex DGA families (replaced old simple DGAs)"""
+    """Generate 11 STRONG DGA families (removed medium ones, added strongest)"""
     domains, labels = [], []
-    print(f"Generating complex DGAs ({num_per_dga} per family)...")
+    print(f"Generating STRONG DGAs ({num_per_dga} per family)...")
 
-    # 1. Wordlist-based DGA (IcedID/Gozi style)
-    print("  - Generating wordlist-based DGA...")
-    domains += wordlist_dga.generate_domains(num_per_dga)
-    labels += ["wordlist_dga"] * num_per_dga
-
-    # 2. Hash-based DGA (HMAC/SHA256)
+    # 1. Hash-based DGA (HMAC/SHA256) - Strong
     print("  - Generating hash-based DGA...")
     secret_keys = ["secret_key_1", "secret_key_2", "secret_key_3"]
     segs = max(1, num_per_dga // len(secret_keys))
@@ -146,12 +143,12 @@ def gen_malicious_core(num_per_dga=15000):
         domains += hash_dga.generate_domains(segs, secret_key=key, start_date=datetime(2024,1,1))
         labels += ["hash_dga"] * segs
 
-    # 3. Context-aware DGA
-    print("  - Generating context-aware DGA...")
+    # 2. Enhanced Context-aware DGA - Very Strong
+    print("  - Generating enhanced context-aware DGA...")
     domains += context_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["context_dga"] * num_per_dga
 
-    # 4. Multi-stage DGA
+    # 3. Multi-stage DGA - Very Strong
     print("  - Generating multi-stage DGA...")
     secrets = ["multistage_secret_1", "multistage_secret_2"]
     segs = max(1, num_per_dga // len(secrets))
@@ -159,48 +156,47 @@ def gen_malicious_core(num_per_dga=15000):
         domains += multistage_dga.generate_domains(segs, secret=secret, start_date=datetime(2024,1,1))
         labels += ["multistage_dga"] * segs
 
-    # 5. Neural-like DGA
+    # 4. Neural-like DGA - Strong
     print("  - Generating neural-like DGA...")
     domains += neural_like_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["neural_like_dga"] * num_per_dga
 
-    # 6. Advanced Hash DGA (multiple hash algorithms)
+    # 5. Advanced Hash DGA - Very Strong
     print("  - Generating advanced hash DGA...")
     domains += advanced_hash_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["advanced_hash_dga"] * num_per_dga
 
-    # 7. Time-varying DGA
+    # 6. Time-varying DGA - Strong
     print("  - Generating time-varying DGA...")
     domains += time_varying_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["time_varying_dga"] * num_per_dga
 
-    # 8. Obfuscated DGA
+    # 7. Obfuscated DGA - Very Strong
     print("  - Generating obfuscated DGA...")
     domains += obfuscated_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["obfuscated_dga"] * num_per_dga
 
-    # 9. Adaptive DGA
+    # 8. Adaptive DGA - Very Strong
     print("  - Generating adaptive DGA...")
     domains += adaptive_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["adaptive_dga"] * num_per_dga
 
-    # 10. Additional wordlist variations
-    print("  - Generating wordlist DGA variations...")
-    seeds = ["wordlist_seed_1", "wordlist_seed_2"]
-    segs = max(1, num_per_dga // len(seeds))
-    for seed in seeds:
-        domains += wordlist_dga.generate_domains(segs, seed=hash(seed) % 1000000)
-        labels += ["wordlist_dga_v2"] * segs
+    # 9. LSTM-based DGA - EXTREMELY STRONG (NEW)
+    print("  - Generating LSTM-based DGA...")
+    domains += lstm_based_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    labels += ["lstm_based_dga"] * num_per_dga
 
-    # 11. Additional hash variations
-    print("  - Generating hash DGA variations...")
-    hash_secrets = ["hash_secret_v1", "hash_secret_v2"]
-    segs = max(1, num_per_dga // len(hash_secrets))
-    for secret in hash_secrets:
-        domains += hash_dga.generate_domains(segs, secret_key=secret, start_date=datetime(2024,1,1))
-        labels += ["hash_dga_v2"] * segs
+    # 10. Adversarial DGA - EXTREMELY STRONG (NEW)
+    print("  - Generating adversarial DGA...")
+    domains += adversarial_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    labels += ["adversarial_dga"] * num_per_dga
 
-    print(f"✓ Generated {len(domains)} malicious domains (complex DGAs)")
+    # 11. GAN-like DGA - EXTREMELY STRONG (NEW)
+    print("  - Generating GAN-like DGA...")
+    domains += gan_like_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    labels += ["gan_like_dga"] * num_per_dga
+
+    print(f"✓ Generated {len(domains)} malicious domains (STRONG DGAs only)")
     return domains, labels
 
 

@@ -51,9 +51,12 @@ def build_detector_model(vocab_size, maxlen=20):
     ])
     return model
 
-def train_adversarial_generator(domains, epochs=30, batch_size=128):
-    """Train adversarial generator to bypass detector"""
-    print("Training adversarial generator (bypassing detector)...")
+def train_adversarial_generator(domains, epochs=50, batch_size=128):
+    """Train adversarial generator to bypass detector
+    
+    Note: Increased epochs to 50 for better adversarial training
+    """
+    print(f"Training adversarial generator on {len(domains)} benign domains ({epochs} epochs)...")
     
     # Build vocabulary
     char_to_idx, idx_to_char = build_char_vocab(domains)

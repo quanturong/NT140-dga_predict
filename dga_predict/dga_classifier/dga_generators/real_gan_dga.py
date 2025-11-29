@@ -48,9 +48,12 @@ def build_discriminator(vocab_size, maxlen=20):
     ])
     return model
 
-def train_gan(domains, epochs=50, batch_size=128):
-    """Train GAN on benign domains"""
-    print("Training GAN generator on benign domains...")
+def train_gan(domains, epochs=100, batch_size=128):
+    """Train GAN on benign domains
+    
+    Note: Increased epochs to 100 for better adversarial training
+    """
+    print(f"Training GAN generator on {len(domains)} benign domains ({epochs} epochs)...")
     
     # Build vocabulary
     char_to_idx, idx_to_char = build_char_vocab(domains)

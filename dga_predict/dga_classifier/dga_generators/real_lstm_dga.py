@@ -44,9 +44,12 @@ def build_lstm_generator(vocab_size, embedding_dim=128, lstm_units=256, maxlen=2
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
     return model
 
-def train_lstm_generator(domains, epochs=50, batch_size=128):
-    """Train LSTM generator on benign domains"""
-    print("Training LSTM generator on benign domains...")
+def train_lstm_generator(domains, epochs=100, batch_size=128):
+    """Train LSTM generator on benign domains
+    
+    Note: Increased epochs to 100 for better learning of benign patterns
+    """
+    print(f"Training LSTM generator on {len(domains)} benign domains ({epochs} epochs)...")
     
     # Build vocabulary
     char_to_idx, idx_to_char = build_char_vocab(domains)

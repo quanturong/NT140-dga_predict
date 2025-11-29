@@ -9,6 +9,15 @@ sys.path.insert(0, os.path.dirname(__file__))
 
 from dga_classifier import data
 
+def is_interactive():
+    """Check if running in interactive environment (can use input())"""
+    try:
+        # Check if stdin is a TTY (terminal)
+        return sys.stdin.isatty()
+    except:
+        # If check fails, assume non-interactive (Kaggle, etc.)
+        return False
+
 def main():
     print("=" * 60)
     print("REGENERATING DATA WITH REAL ML-BASED DGAs")
@@ -21,10 +30,18 @@ def main():
     print("  5. Create final dataset")
     print("\n⚠ This may take 10-30 minutes depending on your system...")
     
-    response = input("\nContinue? (y/n): ")
-    if response.lower() != 'y':
-        print("Cancelled.")
-        return
+    # Auto-continue if non-interactive (Kaggle, etc.)
+    if not is_interactive():
+        print("\n✓ Non-interactive environment detected (Kaggle/Jupyter), auto-continuing...")
+    else:
+        try:
+            response = input("\nContinue? (y/n): ")
+            if response.lower() != 'y':
+                print("Cancelled.")
+                return
+        except (EOFError, KeyboardInterrupt):
+            # If input fails (Kaggle, etc.), auto-continue
+            print("\n✓ Input not available, auto-continuing...")
     
     # Delete existing data file
     data_file = "dga_classifier/traindata.pkl"

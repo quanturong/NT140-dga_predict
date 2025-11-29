@@ -110,7 +110,25 @@ def train_gan(domains, epochs=100, batch_size=128):
         for i in range(batch_size):
             seq = []
             for j in range(maxlen):
-                char_idx = np.random.choice(vocab_size, p=generated_probs[i, j])
+                # Get probability distribution for this position
+                probs = generated_probs[i, j]
+                
+                # Normalize probabilities to ensure they sum to 1
+                # Handle negative values and ensure non-negative
+                probs = np.maximum(probs, 0)  # Remove negative values
+                probs_sum = np.sum(probs)
+                
+                if probs_sum > 0:
+                    probs = probs / probs_sum  # Normalize
+                else:
+                    # If all zeros, use uniform distribution
+                    probs = np.ones(vocab_size) / vocab_size
+                
+                # Ensure probabilities sum to 1 (fix floating point errors)
+                probs = probs / np.sum(probs)
+                
+                # Sample from distribution
+                char_idx = np.random.choice(vocab_size, p=probs)
                 seq.append(char_idx)
             sequences.append(seq)
         return np.array(sequences)
@@ -179,9 +197,23 @@ def generate_domain_gan(generator, char_to_idx, idx_to_char, maxlen, latent_dim,
     for i in range(maxlen):
         char_probs = generated[i]
         
+        # Ensure non-negative and handle NaN/Inf
+        char_probs = np.maximum(char_probs, 0)
+        char_probs = np.nan_to_num(char_probs, nan=0.0, posinf=1.0, neginf=0.0)
+        
         # Apply temperature
         char_probs = np.log(char_probs + 1e-10) / temperature
         char_probs = np.exp(char_probs)
+        
+        # Normalize to ensure sum = 1
+        probs_sum = np.sum(char_probs)
+        if probs_sum > 0:
+            char_probs = char_probs / probs_sum
+        else:
+            # Fallback to uniform if all zeros
+            char_probs = np.ones(vocab_size) / vocab_size
+        
+        # Final normalization to fix floating point errors
         char_probs = char_probs / np.sum(char_probs)
         
         # Sample

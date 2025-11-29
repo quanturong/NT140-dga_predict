@@ -10,8 +10,8 @@ from dga_classifier.dga_generators import (
     hash_dga, context_dga, multistage_dga,
     neural_like_dga, advanced_hash_dga, time_varying_dga,
     obfuscated_dga, adaptive_dga,
-    # New strongest DGAs
-    lstm_based_dga, adversarial_dga, gan_like_dga
+    # REAL ML-based DGAs (state-of-the-art)
+    real_lstm_dga, real_gan_dga, adversarial_trained_dga
 )
 
 ALEXA_1M = "http://s3-us-west-1.amazonaws.com/umbrella-static/top-1m.csv.zip"
@@ -181,20 +181,20 @@ def gen_malicious_core(num_per_dga=15000):
     domains += adaptive_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
     labels += ["adaptive_dga"] * num_per_dga
 
-    # 9. LSTM-based DGA - EXTREMELY STRONG (NEW)
-    print("  - Generating LSTM-based DGA...")
-    domains += lstm_based_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
-    labels += ["lstm_based_dga"] * num_per_dga
+    # 9. Real LSTM-based DGA - STATE-OF-THE-ART (NEW)
+    print("  - Generating real LSTM-based DGA (training on benign domains)...")
+    domains += real_lstm_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    labels += ["real_lstm_dga"] * num_per_dga
 
-    # 10. Adversarial DGA - EXTREMELY STRONG (NEW)
-    print("  - Generating adversarial DGA...")
-    domains += adversarial_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
-    labels += ["adversarial_dga"] * num_per_dga
+    # 10. Real GAN-based DGA - STATE-OF-THE-ART (NEW)
+    print("  - Generating real GAN-based DGA (training GAN)...")
+    domains += real_gan_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    labels += ["real_gan_dga"] * num_per_dga
 
-    # 11. GAN-like DGA - EXTREMELY STRONG (NEW)
-    print("  - Generating GAN-like DGA...")
-    domains += gan_like_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
-    labels += ["gan_like_dga"] * num_per_dga
+    # 11. Adversarial-trained DGA - STATE-OF-THE-ART (NEW)
+    print("  - Generating adversarial-trained DGA (bypassing detector)...")
+    domains += adversarial_trained_dga.generate_domains(num_per_dga, start_date=datetime(2024,1,1))
+    labels += ["adversarial_trained_dga"] * num_per_dga
 
     print(f"✓ Generated {len(domains)} malicious domains (STRONG DGAs only)")
     return domains, labels

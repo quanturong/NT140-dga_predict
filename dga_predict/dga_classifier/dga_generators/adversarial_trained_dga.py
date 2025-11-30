@@ -115,22 +115,60 @@ def train_adversarial_generator(domains, epochs=50, batch_size=128):
     # Adversarial training: generator tries to fool detector
     detector.trainable = False
     
-    z = Input(shape=(latent_dim,))
-    generated_probs = generator(z)
-    # Reshape generator output to (batch, maxlen, vocab_size)
-    generated_reshaped = Reshape((maxlen, vocab_size))(generated_probs)
-    # Convert probabilities to sequences using argmax
-    generated_seqs = Lambda(lambda x: tf.argmax(x, axis=-1, output_type=tf.int32))(generated_reshaped)
-    validity = detector(generated_seqs)
-    adversarial = Model(z, validity)
-    adversarial.compile(optimizer=Adam(0.0002), loss='binary_crossentropy')
+    # Generator optimizer (separate from combined model)
+    generator_optimizer = Adam(0.0002)
     
     # Train generator to minimize detector output (make it think generated = benign)
     target_benign = np.zeros((batch_size, 1))  # Target: detector thinks it's benign
     
     for epoch in range(epochs):
-        noise = np.random.normal(0, 1, (batch_size, latent_dim))
-        g_loss = adversarial.train_on_batch(noise, target_benign)
+        noise = tf.random.normal((batch_size, latent_dim))
+        
+        with tf.GradientTape() as gen_tape:
+            # Generate probabilities
+            gen_probs = generator(noise, training=True)
+            gen_probs_reshaped = tf.reshape(gen_probs, (batch_size, maxlen, vocab_size))
+            gen_probs_reshaped = tf.nn.softmax(gen_probs_reshaped, axis=-1)  # Normalize
+            
+            # Sample sequences and compute log probabilities (differentiable)
+            gen_indices_list = []
+            log_probs_list = []
+            for i in range(batch_size):
+                seq_indices = []
+                seq_log_probs = []
+                for j in range(maxlen):
+                    probs_j = gen_probs_reshaped[i, j, :]
+                    # Sample (non-differentiable, but we'll use log_probs for gradient)
+                    sampled_idx = tf.random.categorical(tf.expand_dims(tf.math.log(probs_j + 1e-10), 0), 1)[0, 0]
+                    seq_indices.append(sampled_idx)
+                    # Log probability (differentiable w.r.t. probs_j)
+                    log_prob = tf.math.log(probs_j[sampled_idx] + 1e-10)
+                    seq_log_probs.append(log_prob)
+                gen_indices_list.append(seq_indices)
+                log_probs_list.append(tf.reduce_sum(seq_log_probs))
+            
+            gen_indices = tf.cast(tf.stack([tf.stack(seq) for seq in gen_indices_list]), tf.int32)
+            gen_log_probs = tf.stack(log_probs_list)  # (batch_size,)
+            
+            # Get detector prediction (non-differentiable path)
+            disc_pred = detector(gen_indices, training=False)
+            rewards = tf.squeeze(disc_pred)  # (batch_size,)
+            
+            # Adversarial loss: we want detector to output 0 (benign)
+            # So we want to minimize detector output
+            # REINFORCE: loss = -mean(log_prob * (1 - reward))
+            # Higher reward (closer to 0 = benign) is better, so use (1 - reward) as reward signal
+            gen_loss = -tf.reduce_mean(gen_log_probs * (1.0 - rewards))
+        
+        # Calculate gradients
+        gen_gradients = gen_tape.gradient(gen_loss, generator.trainable_variables)
+        gen_gradients = [g for g in gen_gradients if g is not None]
+        if len(gen_gradients) > 0:
+            generator_optimizer.apply_gradients(zip(gen_gradients, generator.trainable_variables))
+            g_loss = gen_loss.numpy()
+        else:
+            g_loss = 0.0
+            print("⚠ No gradients for generator, skipping update")
         
         if epoch % 5 == 0:
             print(f"  Epoch {epoch}: G_loss={g_loss:.4f}")

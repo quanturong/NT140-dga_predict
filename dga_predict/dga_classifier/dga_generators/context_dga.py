@@ -4,7 +4,7 @@ Sử dụng nhiều nguồn dữ liệu để tạo domain (simulate external da
 """
 import hashlib
 import random
-from datetime import datetime
+from datetime import datetime, timedelta
 
 # Enhanced external data sources (more realistic)
 NEWS_KEYWORDS = ["tech", "crypto", "ai", "cloud", "data", "security", "update", "news", 
@@ -94,7 +94,13 @@ def generate_domains(num_domains, start_date=None, add_tld=False):
         # Mỗi ngày có context khác nhau
         if i > 0 and i % 50 == 0:
             current_date = datetime(current_date.year, current_date.month, current_date.day)
-            current_date = current_date.replace(day=current_date.day + 1) if current_date.day < 28 else current_date.replace(month=current_date.month + 1, day=1)
+            try:
+                current_date = current_date.replace(day=current_date.day + 1)
+            except ValueError:
+                try:
+                    current_date = current_date.replace(month=current_date.month + 1, day=1)
+                except ValueError:
+                    current_date = current_date.replace(year=current_date.year + 1, month=1, day=1)
             domain_index = 0
         
         context_seed = get_context_seed(current_date)

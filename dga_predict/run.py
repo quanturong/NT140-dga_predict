@@ -22,6 +22,7 @@ from sklearn.metrics import (
 
 import dga_classifier.manual_rf as manualrf
 import dga_classifier.lstm as lstm
+import dga_classifier.transformer as transformer
 
 RESULT_FILE = 'results.pkl'
 METRICS_CSV = 'metrics.csv'
@@ -38,7 +39,7 @@ def set_seed(seed):
     random.seed(seed)
 
 
-def run_experiments(is_manualrf=True, islstm=True, nfolds=10, force=False, seed=42):
+def run_experiments(is_manualrf=True, islstm=True, istransformer=False, nfolds=10, force=False, seed=42):
     """Runs selected experiments and caches results"""
     if not force and os.path.exists(RESULT_FILE):
         with open(RESULT_FILE, 'rb') as f:
@@ -46,7 +47,7 @@ def run_experiments(is_manualrf=True, islstm=True, nfolds=10, force=False, seed=
             return pickle.load(f)
 
     set_seed(seed)
-    results = {'manualrf': None, 'lstm': None}
+    results = {'manualrf': None, 'lstm': None, 'transformer': None}
 
     if is_manualrf:
         print("\n=== Running Manual Statistical Features + RandomForest ===")
@@ -57,6 +58,12 @@ def run_experiments(is_manualrf=True, islstm=True, nfolds=10, force=False, seed=
     if islstm:
         print("\n=== Running LSTM Deep Model ===")
         results['lstm'] = lstm.run(nfolds=nfolds)
+
+    gc.collect()
+
+    if istransformer:
+        print("\n=== Running Transformer Deep Model ===")
+        results['transformer'] = transformer.run(nfolds=nfolds)
 
     with open(RESULT_FILE, 'wb') as f:
         pickle.dump(results, f)
@@ -121,30 +128,47 @@ def create_figs(force=False, nfolds=10, models=('manualrf','lstm'), seed=42):
     """Generate ROC curve comparison for selected models"""
     is_manualrf = 'manualrf' in models
     islstm = 'lstm' in models
+    istransformer = 'transformer' in models
 
-    results = run_experiments(is_manualrf=is_manualrf, islstm=islstm, nfolds=nfolds, force=force, seed=seed)
+    results = run_experiments(
+        is_manualrf=is_manualrf, 
+        islstm=islstm, 
+        istransformer=istransformer,
+        nfolds=nfolds, 
+        force=force, 
+        seed=seed
+    )
 
     plt.figure(figsize=(10, 8))
     plt.style.use('bmh')
 
     metrics_out = {}
+    colors = {'manualrf': 'darkorange', 'lstm': 'steelblue', 'transformer': 'green'}
 
     if results.get('manualrf'):
         fpr_m, tpr_m, metrics_m = summarize_results_arr(results['manualrf'])
         metrics_out['manualrf'] = metrics_m
-        plt.plot(fpr_m, tpr_m, label=f"ManualRF (AUC={metrics_m['auc']:.4f})", color='darkorange')
+        plt.plot(fpr_m, tpr_m, label=f"ManualRF (AUC={metrics_m['auc']:.4f})", color=colors['manualrf'])
 
     if results.get('lstm'):
         fpr_l, tpr_l, metrics_l = summarize_results_arr(results['lstm'])
         metrics_out['lstm'] = metrics_l
-        plt.plot(fpr_l, tpr_l, label=f"LSTM (AUC={metrics_l['auc']:.4f})", color='steelblue')
+        plt.plot(fpr_l, tpr_l, label=f"LSTM (AUC={metrics_l['auc']:.4f})", color=colors['lstm'])
+
+    if results.get('transformer'):
+        fpr_t, tpr_t, metrics_t = summarize_results_arr(results['transformer'])
+        metrics_out['transformer'] = metrics_t
+        plt.plot(fpr_t, tpr_t, label=f"Transformer (AUC={metrics_t['auc']:.4f})", color=colors['transformer'])
 
     plt.plot([0, 1], [0, 1], 'k--')
     plt.xlim([0.0, 1.0])
     plt.ylim([0.0, 1.05])
     plt.xlabel('False Positive Rate', fontsize=16)
     plt.ylabel('True Positive Rate', fontsize=16)
-    plt.title('ROC Curve - ManualRF vs LSTM', fontsize=18)
+    
+    model_names = [m for m in models if results.get(m)]
+    title = 'ROC Curve - ' + ' vs '.join([m.capitalize() for m in model_names])
+    plt.title(title, fontsize=18)
     plt.legend(loc='lower right', fontsize=12)
     plt.grid(True)
     plt.savefig('roc.png', dpi=300)
@@ -155,10 +179,10 @@ def create_figs(force=False, nfolds=10, models=('manualrf','lstm'), seed=42):
 
 
 def main():
-    parser = argparse.ArgumentParser(description='Run DGA experiments (ManualRF vs LSTM)')
+    parser = argparse.ArgumentParser(description='Run DGA experiments (ManualRF vs LSTM vs Transformer)')
     parser.add_argument('--nfolds', type=int, default=10, help='Number of folds (paper uses 10)')
     parser.add_argument('--force', action='store_true', help='Force re-generate results (overwrite results.pkl)')
-    parser.add_argument('--models', type=str, default='manualrf,lstm', help='Comma-separated models to run (manualrf,lstm)')
+    parser.add_argument('--models', type=str, default='manualrf,lstm', help='Comma-separated models to run (manualrf,lstm,transformer)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     parser.add_argument('--fast', action='store_true', help='Use nfolds=1 for quick test (overrides nfolds)')
     args = parser.parse_args()

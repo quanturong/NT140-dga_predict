@@ -131,14 +131,14 @@ def generate_pronounceable_domain():
 
 
 def gen_malicious_core(num_per_dga=15000, benign_domains=None):
-    """Generate 11 STRONG DGA families (removed medium ones, added strongest)
+    """Generate 11 STRONG DGA families only (stub families removed)
     
     Args:
         num_per_dga: Số lượng domain mỗi DGA family
         benign_domains: List benign domains để train Real ML-based DGAs (optional)
     """
     domains, labels = [], []
-    print(f"Generating STRONG DGAs ({num_per_dga} per family)...")
+    print(f"Generating 11 STRONG DGAs only ({num_per_dga:,} domains per family)...")
 
     # 1. Hash-based DGA (HMAC/SHA256) - Strong
     print("  - Generating hash-based DGA...")
@@ -221,49 +221,32 @@ def gen_malicious_core(num_per_dga=15000, benign_domains=None):
     return domains, labels
 
 
-def gen_additional_dgas(num_per_dga=15000):
-    """Generate 19 stub DGA families"""
-    families = [
-        'bamital','bedep','beebone','chinad','cryptowall','dyre',
-        'emotet','feodo','fobber','gameover','gozi','hesperbot',
-        'matsnu','mirai','necurs','nymaim','proslikefan','pushdo','suppobox'
-    ]
-    print(f"Generating {len(families)} stub DGAs ({num_per_dga} each)...")
-    domains, labels = [], []
-
-    def randdom(n=12): return ''.join(random.choice(string.ascii_lowercase) for _ in range(n))
-
-    for fam in families:
-        for _ in range(num_per_dga):
-            if fam == "suppobox":
-                d = randdom(5)+randdom(5)
-            elif fam in ("mirai","gozi","emotet"):
-                d = randdom(8)+str(random.randint(10,99))
-            else:
-                d = randdom(12)
-            domains.append(d)
-            labels.append(fam)
-    print(f"✓ Generated {len(domains)} stub malicious domains")
-    return domains, labels
+# Removed gen_additional_dgas() - now using only STRONG DGA families
+# Stub families (bamital, bedep, beebone, etc.) are no longer used
 
 
 def gen_data(force=False, num_per_dga=15000):
-    """Generate ~1M domain dataset (30 DGAs * 15k + same benign)"""
+    """Generate ~1M domain dataset (11 STRONG DGAs only, no stub families)"""
     if force or not os.path.isfile(DATA_FILE):
         print("\n" + "="*60)
         print("GENERATING TRAINING DATA (~1M domains)")
         print("="*60)
 
         # Get benign domains FIRST to avoid circular dependency
-        # Estimate total malicious domains: 11 strong DGAs + 19 stub DGAs = 30 families
-        estimated_malicious = 30 * num_per_dga
+        # Calculate domains per strong DGA to maintain same total as before
+        # Before: 30 families (11 strong + 19 stub) × num_per_dga = total
+        # Now: 11 strong families × num_per_strong_dga = total (same as before)
+        total_malicious_domains = 30 * num_per_dga  # Keep same total as before (30 families)
+        num_per_strong_dga = total_malicious_domains // 11  # Distribute across 11 strong families
+        estimated_malicious = total_malicious_domains
+        print(f"Using only STRONG DGA families (11 families, ~{num_per_strong_dga:,} domains each)")
+        print(f"Total malicious domains: {total_malicious_domains:,} (same as 30 families × {num_per_dga:,})")
         print("Getting benign domains first (for Real ML-based DGAs training)...")
         benign = get_alexa(estimated_malicious)
         
-        # Now generate malicious domains with benign domains available
-        d1, l1 = gen_malicious_core(num_per_dga, benign_domains=benign)
-        d2, l2 = gen_additional_dgas(num_per_dga)
-        domains, labels = d1 + d2, l1 + l2
+        # Now generate malicious domains with benign domains available (only strong DGAs)
+        d1, l1 = gen_malicious_core(num_per_strong_dga, benign_domains=benign)
+        domains, labels = d1, l1
 
         # Add benign domains to final dataset
         domains += benign

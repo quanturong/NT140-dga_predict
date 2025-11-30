@@ -54,14 +54,21 @@ def prepare_sequences(domains, char_to_idx, maxlen=20):
     """Convert domains to sequences"""
     sequences = []
     for domain in domains:
-        seq = [char_to_idx.get(c, 0) for c in domain.lower()]
-        sequences.append(seq)
+        if not domain or len(domain.strip()) == 0:
+            continue  # Skip empty domains
+        seq = [char_to_idx.get(c, 0) for c in domain.lower() if c in char_to_idx]
+        if len(seq) > 0:  # Only add non-empty sequences
+            sequences.append(seq)
+    if len(sequences) == 0:
+        return np.array([]).reshape(0, maxlen)
     return pad_sequences(sequences, maxlen=maxlen, padding='pre')
 
 def build_lstm_generator(vocab_size, embedding_dim=128, lstm_units=256, maxlen=20):
     """Build LSTM generator model"""
+    # Ensure maxlen is valid
+    maxlen = max(5, maxlen)
     model = Sequential([
-        Embedding(vocab_size, embedding_dim),  # Removed deprecated input_length
+        Embedding(vocab_size, embedding_dim, input_length=maxlen),
         LSTM(lstm_units, return_sequences=True),
         LSTM(lstm_units),
         Dense(vocab_size, activation='softmax')
@@ -77,28 +84,54 @@ def train_lstm_generator(domains, epochs=100, batch_size=128):
     print(f"Training LSTM generator on {len(domains)} benign domains ({epochs} epochs)...")
     print("  (Using CPU if GPU unavailable - this may take longer)")
     
+    # Filter out empty domains
+    domains = [d for d in domains if d and len(d.strip()) > 0]
+    if len(domains) < 100:
+        print("⚠ Not enough valid domains for training")
+        return None, None, None
+    
     # Build vocabulary
     char_to_idx, idx_to_char = build_char_vocab(domains)
     vocab_size = len(char_to_idx)
+    if vocab_size < 2:
+        print("⚠ Vocabulary too small")
+        return None, None, None
+    
     maxlen = min(20, max(len(d) for d in domains))
+    maxlen = max(5, maxlen)  # Ensure maxlen >= 5
     
     # Prepare sequences
     X = prepare_sequences(domains, char_to_idx, maxlen)
     
+    if X.shape[0] == 0 or X.shape[1] == 0:
+        print("⚠ No valid sequences prepared")
+        return None, None, None
+    
     # Create training data (predict next character)
     X_train, y_train = [], []
     for seq in X:
-        for i in range(1, len(seq)):
-            if seq[i] != 0:  # Not padding
-                X_train.append(seq[:i])
-                y_train.append(seq[i])
+        # Find first non-padding index
+        non_pad_indices = np.where(seq != 0)[0]
+        if len(non_pad_indices) < 2:  # Need at least 2 characters
+            continue
+        for i in range(1, len(non_pad_indices)):
+            idx = non_pad_indices[i]
+            prev_idx = non_pad_indices[i-1]
+            if seq[idx] != 0:  # Not padding
+                X_train.append(seq[:idx])
+                y_train.append(seq[idx])
     
     if len(X_train) == 0:
-        # Fallback: use simple patterns
+        print("⚠ No training samples created")
         return None, None, None
     
     X_train = pad_sequences(X_train, maxlen=maxlen, padding='pre')
     y_train = np.array(y_train)
+    
+    # Final validation
+    if X_train.shape[0] == 0 or X_train.shape[1] == 0:
+        print("⚠ Training data has zero dimensions")
+        return None, None, None
     
     # Build and train model
     model = build_lstm_generator(vocab_size, maxlen=maxlen)

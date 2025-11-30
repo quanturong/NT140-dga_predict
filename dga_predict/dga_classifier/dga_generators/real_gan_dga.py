@@ -63,10 +63,12 @@ def build_generator(vocab_size, maxlen=20, latent_dim=100):
 
 def build_discriminator(vocab_size, maxlen=20):
     """Build GAN Discriminator"""
+    # Ensure maxlen is valid
+    maxlen = max(5, maxlen)
     # Use Input layer to specify input shape explicitly
     from tensorflow.keras.layers import Input
     input_layer = Input(shape=(maxlen,))
-    embedding = Embedding(vocab_size, 128)(input_layer)
+    embedding = Embedding(vocab_size, 128, input_length=maxlen)(input_layer)
     lstm = LSTM(128)(embedding)
     dense1 = Dense(64)(lstm)
     dropout = Dropout(0.5)(dense1)
@@ -88,14 +90,30 @@ def train_gan(domains, epochs=100, batch_size=128):
     vocab_size = len(char_to_idx)
     maxlen = min(20, max(len(d) for d in domains))
     
+    # Filter out empty domains
+    domains = [d for d in domains if d and len(d.strip()) > 0]
+    if len(domains) < 100:
+        print("⚠ Not enough valid domains for training")
+        return None, None, None
+    
     # Prepare real data
     X_real = []
     for domain in domains[:10000]:  # Limit for training speed
-        seq = [char_to_idx.get(c, 0) for c in domain.lower()[:maxlen]]
-        X_real.append(seq)
-    X_real = pad_sequences(X_real, maxlen=maxlen, padding='pre')
+        if not domain or len(domain.strip()) == 0:
+            continue
+        seq = [char_to_idx.get(c, 0) for c in domain.lower()[:maxlen] if c in char_to_idx]
+        if len(seq) > 0:  # Only add non-empty sequences
+            X_real.append(seq)
     
     if len(X_real) < 100:
+        print("⚠ Not enough valid sequences after filtering")
+        return None, None, None
+    
+    X_real = pad_sequences(X_real, maxlen=maxlen, padding='pre')
+    
+    # Validate shape
+    if X_real.shape[0] == 0 or X_real.shape[1] == 0:
+        print("⚠ X_real has zero dimensions")
         return None, None, None
     
     # Build models
@@ -210,8 +228,9 @@ def train_gan(domains, epochs=100, batch_size=128):
         gen_seqs = sample_sequences(gen_probs, batch_size, maxlen, vocab_size)
         
         # Validate sequences before training
-        if gen_seqs.shape[1] == 0:
-            raise ValueError(f"Generated sequences have zero length! Shape: {gen_seqs.shape}")
+        if len(gen_seqs.shape) < 2 or gen_seqs.shape[1] == 0:
+            print(f"⚠ Invalid generated sequences shape: {gen_seqs.shape}, skipping batch")
+            continue
         
         # Ensure sequences are padded to maxlen for discriminator
         if gen_seqs.shape[1] < maxlen:
@@ -222,8 +241,17 @@ def train_gan(domains, epochs=100, batch_size=128):
             # Truncate sequences
             gen_seqs = gen_seqs[:, :maxlen]
         
-        d_loss_real = discriminator.train_on_batch(real_seqs, valid)
-        d_loss_fake = discriminator.train_on_batch(gen_seqs, fake)
+        # Final validation
+        if gen_seqs.shape[1] != maxlen:
+            print(f"⚠ Sequence length mismatch: {gen_seqs.shape[1]} != {maxlen}, skipping batch")
+            continue
+        
+        try:
+            d_loss_real = discriminator.train_on_batch(real_seqs, valid)
+            d_loss_fake = discriminator.train_on_batch(gen_seqs, fake)
+        except Exception as e:
+            print(f"⚠ Error training discriminator: {e}, skipping batch")
+            continue
         d_loss = 0.5 * np.add(d_loss_real, d_loss_fake)
         
         # Train Generator

@@ -182,7 +182,7 @@ def main():
     parser = argparse.ArgumentParser(description='Run DGA experiments (ManualRF vs LSTM vs Transformer)')
     parser.add_argument('--nfolds', type=int, default=10, help='Number of folds (paper uses 10)')
     parser.add_argument('--force', action='store_true', help='Force re-generate results (overwrite results.pkl)')
-    parser.add_argument('--models', type=str, default='manualrf,lstm', help='Comma-separated models to run (manualrf,lstm,transformer)')
+    parser.add_argument('--models', type=str, default='manualrf,lstm,transformer', help='Comma-separated models to run (manualrf,lstm,transformer)')
     parser.add_argument('--seed', type=int, default=42, help='Random seed for reproducibility')
     parser.add_argument('--fast', action='store_true', help='Use nfolds=1 for quick test (overrides nfolds)')
     args = parser.parse_args()

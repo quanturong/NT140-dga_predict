@@ -79,10 +79,10 @@ def build_detector_model(vocab_size, maxlen=20):
     model = Model(inputs=input_layer, outputs=output)
     return model
 
-def train_adversarial_generator(domains, epochs=50, batch_size=128):
+def train_adversarial_generator(domains, epochs=15, batch_size=128):
     """Train adversarial generator to bypass detector
     
-    Note: Increased epochs to 50 for better adversarial training
+    Note: Reduced epochs to 15 for faster training
     """
     print(f"Training adversarial generator on {len(domains)} benign domains ({epochs} epochs)...")
     print("  (Using CPU if GPU unavailable - this may take longer)")
@@ -94,7 +94,7 @@ def train_adversarial_generator(domains, epochs=50, batch_size=128):
     
     # Prepare data
     X_real = []
-    for domain in domains[:5000]:
+    for domain in domains[:2000]:
         seq = [char_to_idx.get(c, 0) for c in domain.lower()[:maxlen]]
         X_real.append(seq)
     X_real = pad_sequences(X_real, maxlen=maxlen, padding='pre')
@@ -110,7 +110,7 @@ def train_adversarial_generator(domains, epochs=50, batch_size=128):
     # Train detector first on real data
     y_real = np.zeros((len(X_real), 1))  # 0 = benign
     detector.compile(optimizer=Adam(0.001), loss='binary_crossentropy', metrics=['accuracy'])
-    detector.fit(X_real, y_real, epochs=10, batch_size=batch_size, verbose=0)
+    detector.fit(X_real, y_real, epochs=5, batch_size=batch_size, verbose=0)
     
     # Adversarial training: generator tries to fool detector
     detector.trainable = False
@@ -258,8 +258,8 @@ def generate_domains_with_benign(num_domains, benign_domains, start_date=None, a
         if len(benign_domains) < 1000:
             return generate_domains_fallback(num_domains, start_date, add_tld)
         
-        # Use provided benign domains (limit to 10k for training speed)
-        training_domains = benign_domains[:10000]
+        # Use provided benign domains (limit to 5k for training speed)
+        training_domains = benign_domains[:5000]
         generator, char_to_idx, idx_to_char = train_adversarial_generator(training_domains)
         if generator is None:
             return generate_domains_fallback(num_domains, start_date, add_tld)

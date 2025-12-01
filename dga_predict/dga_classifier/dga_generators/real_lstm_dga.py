@@ -76,10 +76,10 @@ def build_lstm_generator(vocab_size, embedding_dim=128, lstm_units=256, maxlen=2
     model.compile(optimizer='adam', loss='sparse_categorical_crossentropy')
     return model
 
-def train_lstm_generator(domains, epochs=100, batch_size=128):
+def train_lstm_generator(domains, epochs=20, batch_size=128):
     """Train LSTM generator on benign domains
     
-    Note: Increased epochs to 100 for better learning of benign patterns
+    Note: Reduced epochs to 20 for faster training
     """
     print(f"Training LSTM generator on {len(domains)} benign domains ({epochs} epochs)...")
     print("  (Using CPU if GPU unavailable - this may take longer)")
@@ -216,8 +216,8 @@ def generate_domains_with_benign(num_domains, benign_domains, start_date=None, a
             print("⚠ Not enough benign domains, using fallback generator")
             return generate_domains_fallback(num_domains, start_date, add_tld)
         
-        # Use provided benign domains (limit to 50k for training speed)
-        training_domains = benign_domains[:50000]
+        # Use provided benign domains (limit to 5k for training speed)
+        training_domains = benign_domains[:5000]
         model, char_to_idx, idx_to_char = train_lstm_generator(training_domains)
         if model is None:
             return generate_domains_fallback(num_domains, start_date, add_tld)

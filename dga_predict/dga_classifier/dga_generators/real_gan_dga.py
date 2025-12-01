@@ -77,10 +77,10 @@ def build_discriminator(vocab_size, maxlen=20):
     model = Model(inputs=input_layer, outputs=output)
     return model
 
-def train_gan(domains, epochs=100, batch_size=128):
+def train_gan(domains, epochs=20, batch_size=128):
     """Train GAN on benign domains
     
-    Note: Increased epochs to 100 for better adversarial training
+    Note: Reduced epochs to 20 for faster training
     """
     print(f"Training GAN generator on {len(domains)} benign domains ({epochs} epochs)...")
     print("  (Using CPU if GPU unavailable - this may take longer)")
@@ -98,7 +98,7 @@ def train_gan(domains, epochs=100, batch_size=128):
     
     # Prepare real data
     X_real = []
-    for domain in domains[:10000]:  # Limit for training speed
+    for domain in domains[:5000]:  # Limit for training speed
         if not domain or len(domain.strip()) == 0:
             continue
         seq = [char_to_idx.get(c, 0) for c in domain.lower()[:maxlen] if c in char_to_idx]
@@ -382,8 +382,8 @@ def generate_domains_with_benign(num_domains, benign_domains, start_date=None, a
         if len(benign_domains) < 1000:
             return generate_domains_fallback(num_domains, start_date, add_tld)
         
-        # Use provided benign domains (limit to 20k for training speed)
-        training_domains = benign_domains[:20000]
+        # Use provided benign domains (limit to 5k for training speed)
+        training_domains = benign_domains[:5000]
         generator, char_to_idx, idx_to_char = train_gan(training_domains)
         if generator is None:
             return generate_domains_fallback(num_domains, start_date, add_tld)
